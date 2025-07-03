@@ -172,7 +172,7 @@
                 "Path": "/",
                 "Policies": [
                     {
-                        "PolicyName": "rcpAWSBatchRolePolicy",
+                        "PolicyName": "AWSBatchRolePolicy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -217,7 +217,7 @@
                         }
                     }
                 ],
-                "RoleName": "rcpAWSBatchRole",
+                "RoleName": "AWSBatchRole",
                 "Tags": [
                     {
                         "Key": "Application",
@@ -260,7 +260,7 @@
         "AWSBatchCompute": {
             "Type": "AWS::Batch::ComputeEnvironment",
             "Properties": {
-                "ComputeEnvironmentName": "rcpAWSBatchCompute",
+                "ComputeEnvironmentName": "AWSBatchCompute",
                 "Type": "MANAGED",
                 "ComputeResources": {
                     "AllocationStrategy": "SPOT_CAPACITY_OPTIMIZED",
@@ -333,7 +333,7 @@
                 ],
                 "State": "ENABLED",
                 "Priority": 1,
-                "JobQueueName": "rcpAWSBatchQueue"
+                "JobQueueName": "AWSBatchQueue"
             },
             "DependsOn": "AWSBatchCompute"
         }
