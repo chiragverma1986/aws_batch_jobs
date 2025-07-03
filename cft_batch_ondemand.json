@@ -227,11 +227,11 @@
                 "Tags": [
                     {
                         "Key": "Brand",
-                        "Value": "Expedia Product Technology"
+                        "Value": "Brand"
                     },
                     {
                         "Key": "Team",
-                        "Value": "CDFS SRE"
+                        "Value": "Team"
                     },
                     {
                         "Key": "Application",
@@ -377,7 +377,7 @@
                         }
                     }
                 ],
-                "RoleName": "rcpAWSBatchRoleShadow",
+                "RoleName": "AWSBatchRole",
                 "Tags": [
                     {
                         "Key": "Application",
@@ -397,7 +397,7 @@
                     },
                     {
                         "Key": "Name",
-                        "Value": "rcpBatchCompute"
+                        "Value": "BatchCompute"
                     },
                     {
                         "Key": "Team",
@@ -452,7 +452,7 @@
                         "AssetProtectionLevel": "AssetProtectionLevel",
                         "Brand": "Brand",
                         "CostCenter": "CostCenter",
-                        "Name": "rcpAWSBatchCompute",
+                        "Name": "AWSBatchCompute",
                         "Team": "Team"
                     },
                     "Ec2Configuration": [
@@ -501,12 +501,12 @@
                 "ComputeEnvironmentOrder": [
                     {
                         "Order": 1,
-                        "ComputeEnvironment": "rcpAWSBatchCompute-Q1"
+                        "ComputeEnvironment": "AWSBatchCompute-Q1"
                     }
                 ],
                 "State": "ENABLED",
                 "Priority": 1,
-                "JobQueueName": "rcpAWSBatchQueueShadow"
+                "JobQueueName": "AWSBatchQueue"
             },
             "DependsOn": "AWSBatchCompute"
         }
