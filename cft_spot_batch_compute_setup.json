@@ -1,0 +1,348 @@
+{
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Batch Compute Parameters"
+                    },
+                    "Parameters": [
+                        "Username",
+                        "Password",
+                        "RegistryUrl",
+                        "SecurityGroup",
+                        "SubnetList"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "Username": {
+            "Description": "Username to use with authenticating to container registry",
+            "Type": "String",
+            "NoEcho": true
+        },
+        "Password": {
+            "Description": "Password or access token to use with authenticating to container registry",
+            "Type": "String",
+            "NoEcho": true
+        },
+        "RegistryUrl": {
+            "Description": "The container registry containing private images to be pulled",
+            "Type": "String",
+            "Default": "https://index.docker.io/v1/"
+        },
+        "SecurityGroup": {
+            "Description": "List of Security Groups for Application",
+            "Type": "List<AWS::EC2::SecurityGroup::Id>",
+            "Default": "sg-01"
+        },
+        "SubnetList": {
+            "Type": "List<AWS::EC2::Subnet::Id>",
+            "Description": "Subnet List for Application",
+            "Default": "subnet-04, subnet-06,subnet-05"
+        }
+    },
+    "Resources": {
+        "BatchLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "AWSBatch-template"
+                },
+                "LaunchTemplateData": {
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "MIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"==MYBOUNDARY==\"\n\n--==MYBOUNDARY==\nContent-Type: text/cloud-config; charset=\"us-ascii\"\n\npackages:\n- jq\n- aws-cli\n\nruncmd:\n-  export SECRET_STRING=$(/usr/bin/aws secretsmanager get-secret-value --secret-id ${BatchRegistrySecret} --region us-west-2 | jq -r '.SecretString')\n- export USERNAME=$(echo $SECRET_STRING | jq -r '.username')\n- export PASSWORD=$(echo $SECRET_STRING | jq -r '.password')\n- export REGISTRY_URL=$(echo $SECRET_STRING | jq -r '.registry_url')\n- echo $PASSWORD | docker login --username $USERNAME --password-stdin $REGISTRY_URL\n- export AUTH=$(cat ~/.docker/config.json | jq -c .auths)\n- echo 'ECS_ENGINE_AUTH_TYPE=dockercfg' >> /etc/ecs/ecs.config\n- echo \"ECS_ENGINE_AUTH_DATA=$AUTH\" >> /etc/ecs/ecs.config\n\n--==MYBOUNDARY==--\n"
+                        }
+                    }
+                }
+            }
+        },
+        "BatchRegistrySecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "batchPrivateRegistries"
+                },
+                "Description": "Secret used to store users username and password for Batch private image demo",
+                "SecretString": {
+                    "Fn::Sub": "{\"username\":\"${Username}\",\"password\":\"${Password}\",\"registry_url\":\"${RegistryUrl}\"}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BatchRegistrySecret"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "Application"
+                    },
+                    {
+                        "Key": "AssetProtectionLevel",
+                        "Value": "AssetProtectionLevel"
+                    },
+                    {
+                        "Key": "Brand",
+                        "Value": "Brand"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "Team"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "CostCenter"
+                    }
+                ]
+            }
+        },
+        "EC2KeyPair": {
+            "Type": "AWS::EC2::KeyPair",
+            "Properties": {
+                "KeyName": "BatchKey",
+                "Tags": [
+                    {
+                        "Key": "Brand",
+                        "Value": "Brand"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "Brand"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "Application"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "CostCenter"
+                    },
+                    {
+                        "Key": "AssetProtectionLevel",
+                        "Value": "AssetProtectionLevel"
+                    }
+                ]
+            }
+        },
+        "BatchServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "batch-service-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "batch.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole"
+                ]
+            }
+        },
+        "BatchComputeRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com",
+                                    "events.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Description": "Batch Role for AWS Batch",
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "rcpAWSBatchRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeTags",
+                                        "ecs:CreateCluster",
+                                        "ecs:DeregisterContainerInstance",
+                                        "ecs:DiscoverPollEndpoint",
+                                        "ecs:Poll",
+                                        "ecs:RegisterContainerInstance",
+                                        "ecs:StartTelemetrySession",
+                                        "ecs:UpdateContainerInstancesState",
+                                        "ecs:Submit*",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "ecs:TagResource",
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "ecs:CreateAction": [
+                                                "CreateCluster",
+                                                "RegisterContainerInstance"
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "secretsmanager:GetSecretValue",
+                                    "Resource": {
+                                        "Ref": "BatchRegistrySecret"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "RoleName": "rcpAWSBatchRole",
+                "Tags": [
+                    {
+                        "Key": "Application",
+                        "Value": "Application"
+                    },
+                    {
+                        "Key": "AssetProtectionLevel",
+                        "Value": "AssetProtectionLevel"
+                    },
+                    {
+                        "Key": "Brand",
+                        "Value": "Brand"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "CostCenter"
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": "BatchCompute"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "Team"
+                    }
+                ]
+            }
+        },
+        "AWSBatchInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "BatchComputeRole"
+                    }
+                ]
+            }
+        },
+        "AWSBatchCompute": {
+            "Type": "AWS::Batch::ComputeEnvironment",
+            "Properties": {
+                "ComputeEnvironmentName": "rcpAWSBatchCompute",
+                "Type": "MANAGED",
+                "ComputeResources": {
+                    "AllocationStrategy": "SPOT_CAPACITY_OPTIMIZED",
+                    "Ec2KeyPair": {
+                        "Ref": "EC2KeyPair"
+                    },
+                    "Type": "SPOT",
+                    "LaunchTemplate": {
+                        "LaunchTemplateId": {
+                            "Ref": "BatchLaunchTemplate"
+                        }
+                    },
+                    "MinvCpus": 4,
+                    "DesiredvCpus": 32,
+                    "MaxvCpus": 64,
+                    "InstanceTypes": [
+                        "optimal"
+                    ],
+                    "Tags": {
+                        "Application": "Application",
+                        "AssetProtectionLevel": "Application",
+                        "Brand": "Brand",
+                        "CostCenter": "CostCenter",
+                        "Name": "CostCenter",
+                        "Team": "Team"
+                    },
+                    "Subnets": {
+                        "Fn::Split": [
+                            ",",
+                            {
+                                "Fn::Join": [
+                                    ",",
+                                    {
+                                        "Ref": "SubnetList"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "SecurityGroupIds": {
+                        "Fn::Split": [
+                            ",",
+                            {
+                                "Fn::Join": [
+                                    ",",
+                                    {
+                                        "Ref": "SecurityGroup"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "InstanceRole": {
+                        "Ref": "AWSBatchInstanceProfile"
+                    }
+                },
+                "ServiceRole": {
+                    "Ref": "BatchServiceRole"
+                }
+            }
+        },
+        "JobQueue": {
+            "Type": "AWS::Batch::JobQueue",
+            "Properties": {
+                "ComputeEnvironmentOrder": [
+                    {
+                        "Order": 1,
+                        "ComputeEnvironment": "AWSBatchComputeOld"
+                    }
+                ],
+                "State": "ENABLED",
+                "Priority": 1,
+                "JobQueueName": "rcpAWSBatchQueue"
+            },
+            "DependsOn": "AWSBatchCompute"
+        }
+    },
+    "Outputs": {
+        "EC2KeyPairName": {
+            "Value": {
+                "Ref": "EC2KeyPair"
+            }
+        }
+    }
+}
