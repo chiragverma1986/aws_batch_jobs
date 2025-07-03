@@ -7,5 +7,5 @@ password = "your-registry-password"
 registry_url = "https://index.docker.io/v1/"
 
 # Network configuration
-security_group = ["sg-01234567"]
+security_group = ["sg-01"]
 subnet_list = ["subnet-04", "subnet-06", "subnet-05"]
