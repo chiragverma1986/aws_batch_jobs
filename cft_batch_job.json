@@ -20,7 +20,7 @@
     },
     "JobQueue": {
       "Description": "Name of the JobQueue",
-      "Default": "JobQueue-dev",
+      "Default": "JobQueue",
       "Type": "String"
     },
     "JobDefinitionName": {
@@ -51,16 +51,16 @@
   "Mappings": {
     "EnvMap": {
       "dev": {
-        "DBSecret": "db-secrets",
-        "Database": "booking_db",
+        "DBSecret": "secrets",
+        "Database": "db",
         "Catalog": "AwsDataCatalog",
         "CrossAccountID": 7,
         "AWSRcpAccountId": "4",
         "AthenaOutputS3Bucket": "aws2"
       },
       "shadow": {
-        "DBSecret": "db-secrets",
-        "Database": "booking_db",
+        "DBSecret": "secrets",
+        "Database": "db",
         "Catalog": "AwsDataCatalog",
         "CrossAccountID": 3,
         "AWSRcpAccountId": "4",
@@ -231,7 +231,7 @@
                     },
                     {
                       "Fn::Sub": [
-                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/booking_header_json",
+                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/hdr_json",
                         {
                           "CrossAccountID": {
                             "Fn::FindInMap": [
@@ -256,7 +256,7 @@
                     },
                     {
                       "Fn::Sub": [
-                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/booking_header",
+                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/hdr",
                         {
                           "CrossAccountID": {
                             "Fn::FindInMap": [
@@ -281,7 +281,7 @@
                     },
                     {
                       "Fn::Sub": [
-                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/booking_linedetail_json",
+                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/detail_json",
                         {
                           "CrossAccountID": {
                             "Fn::FindInMap": [
@@ -306,7 +306,7 @@
                     },
                     {
                       "Fn::Sub": [
-                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/booking_linedetail",
+                        "arn:aws:glue:${AWS::Region}:${CrossAccountID}:table/${Database}/detail",
                         {
                           "CrossAccountID": {
                             "Fn::FindInMap": [
