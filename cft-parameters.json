@@ -1,0 +1,547 @@
+{
+    "Parameters": {
+        "Environment": {
+            "Default": "test",
+            "Description": "Must be one of the following: test,stage,shadow and prod.",
+            "Type": "String"
+        },
+        "Profile": {
+            "Default": "test",
+            "Description": "Must be one of the following: dev,int,maui,prod.",
+            "Type": "String"
+        },
+        "TestBucketName": {
+            "Description": "S3 bucket name where the lambda source zip is located.",
+            "Type": "String"
+        },
+        "TestLambdaS3Key": {
+            "Description": "Path of the lambda zip file",
+            "Type": "String"
+        },
+        "ImageVersion": {
+            "Description": "Version Number of the docker image",
+            "Default": "1.1",
+            "Type": "String"
+        },
+        "JobName": {
+            "Description": "Name of the Job",
+            "Type": "String"
+        },
+        "JobQueue": {
+            "Description": "Name of the JobQueue",
+            "Default": "AWSBatchQueue",
+            "Type": "String"
+        },
+        "JobDefinitionName": {
+            "Description": "Name of the JobDefinition, It can be same as JobName",
+            "Type": "String"
+        },
+        "JobTimeout": {
+            "Description": "Job Timeout",
+            "Type": "String",
+            "Default": 3600
+        },
+        "Memory": {
+            "Description": "Amount of Memory needed for the Job",
+            "Type": "String",
+            "Default": 8192
+        },
+        "Vcpus": {
+            "Description": "No of CPU's needed for the Job",
+            "Type": "String",
+            "Default": "2"
+        }
+    },
+    "Mappings": {
+        "EnvMap": {
+            "test": {
+                "TestSecret": "dummy-test",
+                "AWSSecretArn": "arn:aws:secretsmanager:us-west-2:4:secret:*",
+                "ScheduleState": "DISABLED",
+                "ScheduleInterval": "cron(30 21,2 * * ? *)",
+                "StatusCheckLambda": "arn:aws:lambda:us-west-2:4:function:status-check-lambda-test",
+                "NotifyLambda": "arn:aws:lambda:us-west-2:4:function:notify-lambda-test",
+                "AccountId": 4,
+                "LogLevel": "DEBUG",
+                "ExecuteStateMachineRole": "arn:aws:iam::4:role/Role-test",
+                "SURL": "{{resolve:secretsmanager:dummy-test:SecretString:test_url}}"
+            }
+        }
+    },
+    "Resources": {
+        "BatchContainerIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "JobName"
+                            },
+                            "Role",
+                            {
+                                "Ref": "Environment"
+                            }
+                        ]
+                    ]
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ecs-tasks.amazonaws.com",
+                                    "events.amazonaws.com",
+                                    "states.amazonaws.com",
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    "BatchContainer",
+                                    {
+                                        "Ref": "Environment"
+                                    }
+                                ]
+                            ]
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketLocation",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketMultipartUploads",
+                                        "s3:ListMultipartUploadParts",
+                                        "s3:AbortMultipartUpload",
+                                        "s3:CreateBucket",
+                                        "s3:PutObject",
+                                        "SNS:Publish",
+                                        "batch:SubmitJob",
+                                        "events:PutTargets",
+                                        "events:PutRule",
+                                        "events:DescribeRule",
+                                        "lambda:InvokeFunction",
+                                        "batch:SubmitJob",
+                                        "batch:DescribeJobs",
+                                        "batch:TerminateJob",
+                                        "batch:ListJobs"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Action": [
+                                        "states:ListExecutions",
+                                        "states:DescribeStateMachine",
+                                        "states:DescribeExecution",
+                                        "states:GetActivityTask",
+                                        "states:StartExecution"
+                                    ],
+                                    "Resource": [
+                                        "arn:aws:states:us-west-2:*:stateMachine:a*"
+                                    ],
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Action": [
+                                        "secretsmanager:GetResourcePolicy",
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret",
+                                        "secretsmanager:ListSecretVersionIds"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": {
+                                        "Fn::FindInMap": [
+                                            "EnvMap",
+                                            {
+                                                "Ref": "Environment"
+                                            },
+                                            "AWSSecretArn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Action": [
+                                        "ses:SendRawEmail",
+                                        "ses:SendEmail"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "JobDefinition": {
+            "Type": "AWS::Batch::JobDefinition",
+            "Properties": {
+                "Type": "Container",
+                "Parameters": {
+                    "arguments": "{\"Start_Date\": \"YYYY-MM-DD\",\"End_Date\": \"YYYY-MM-DD\",\"Notified_To\": \"abc@xyz.com\"}"
+                },
+                "PropagateTags": true,
+                "Tags": {
+                    "Application": "test",
+                    "Team": "Test"
+                },
+                "ContainerProperties": {
+                    "Command": [
+                        "bash",
+                        "trigger.sh",
+                        "Ref::arguments"
+                    ],
+                    "Memory": {
+                        "Ref": "Memory"
+                    },
+                    "JobRoleArn": {
+                        "Ref": "BatchContainerIAMRole"
+                    },
+                    "Vcpus": {
+                        "Ref": "Vcpus"
+                    },
+                    "Image": "test-docker-image:latest",
+                    "Environment": [
+                        {
+                            "Name": "Environment",
+                            "Value": {
+                                "Ref": "Environment"
+                            }
+                        },
+                        {
+                            "Name": "LogLevel",
+                            "Value": {
+                                "Fn::FindInMap": [
+                                    "EnvMap",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "LogLevel"
+                                ]
+                            }
+                        },
+                        {
+                            "Name": "TestSecret",
+                            "Value": {
+                                "Fn::FindInMap": [
+                                    "EnvMap",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "TestSecret"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "JobDefinitionName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "JobName"
+                            },
+                            {
+                                "Ref": "Environment"
+                            }
+                        ]
+                    ]
+                },
+                "RetryStrategy": {
+                    "Attempts": 3
+                },
+                "Timeout": {
+                    "AttemptDurationSeconds": {
+                        "Ref": "JobTimeout"
+                    }
+                }
+            }
+        },
+        "BatchJobStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "JobName"
+                            },
+                            {
+                                "Ref": "Environment"
+                            }
+                        ]
+                    ]
+                },
+                "DefinitionString": {
+                    "Fn::Sub": [
+                        "{\n  \"StartAt\": \"Get Previous Job Status\",\n  \"States\": {\n    \"Get Previous Job Status\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${statusJobArn}\",\n      \"Next\": \"Job Running?\",\n      \"TimeoutSeconds\": 300,\n      \"ResultPath\": \"$.job_status\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"IntervalSeconds\": 1,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ]\n    },\n\n    \"Job Running?\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.job_status['job_status']\",\n          \"StringEquals\": \"NOT_READY\",\n          \"Next\": \"Exit Job\"\n        },\n        {\n          \"Variable\": \"$.job_status['job_status']\",\n          \"StringEquals\": \"READY\",\n          \"Next\": \"Submit Batch Job\"\n        }\n      ]\n    },\n\n    \"Exit Job\": {\n      \"Type\": \"Pass\",\n      \"Result\": \"Exiting as previous job is running\",\n      \"End\": true\n    },\n\n    \"Submit Batch Job\": {\n      \"Type\": \"Task\",\n      \"TimeoutSeconds\": 21600,\n      \"Resource\": \"arn:aws:states:::batch:submitJob.sync\",\n      \"Parameters\": {\n        \"JobName\": \"${JobName}\",\n        \"JobQueue\": \"${JobQueue}\",\n        \"JobDefinition\": \"${JobDefinition}\",\n   \"Parameters.$\": \"$.batchjob.parameters\"\n },\n      \"Next\": \"Notify Success\",\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [ \"States.ALL\" ],\n          \"ResultPath\": \"$.error\",\n          \"Next\": \"Job Failed\"\n        }\n      ]\n    },\n\n    \"Notify Success\": {\n      \"Type\": \"Pass\",\n      \"Result\": \"success\",\n      \"End\": true\n     },\n  \n   \n          \"Job Failed\": {\n      \"Type\": \"Fail\",\n      \"Cause\": \"$.error\"\n     }\n  }\n}",
+                        {
+                            "statusJobArn": {
+                                "Fn::FindInMap": [
+                                    "EnvMap",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "StatusCheckLambda"
+                                ]
+                            },
+                            "JobName": {
+                                "Ref": "JobName"
+                            },
+                            "JobTimeout": {
+                                "Ref": "JobTimeout"
+                            },
+                            "JobQueue": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:batch:us-west-2:",
+                                        {
+                                            "Fn::FindInMap": [
+                                                "EnvMap",
+                                                {
+                                                    "Ref": "Environment"
+                                                },
+                                                "AccountId"
+                                            ]
+                                        },
+                                        ":job-queue/",
+                                        {
+                                            "Ref": "JobQueue"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "JobDefinition": {
+                                "Ref": "JobDefinition"
+                            },
+                            "Environment": {
+                                "Ref": "Environment"
+                            }
+                        }
+                    ]
+                },
+                "RoleArn": {
+                    "Fn::FindInMap": [
+                        "EnvMap",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "ExecuteStateMachineRole"
+                    ]
+                }
+            }
+        },
+        "CloudWatchEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Description": "Rule to trigger the batch job",
+                "ScheduleExpression": {
+                    "Fn::FindInMap": [
+                        "EnvMap",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "ScheduleInterval"
+                    ]
+                },
+                "Name": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "JobName"
+                            },
+                            {
+                                "Ref": "Environment"
+                            }
+                        ]
+                    ]
+                },
+                "State": {
+                    "Fn::FindInMap": [
+                        "EnvMap",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "ScheduleState"
+                    ]
+                },
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "BatchJobStateMachine"
+                        },
+                        "Id": "SFN_Target",
+                        "RoleArn": {
+                            "Fn::FindInMap": [
+                                "EnvMap",
+                                {
+                                    "Ref": "Environment"
+                                },
+                                "ExecuteStateMachineRole"
+                            ]
+                        },
+                        "Input": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "{\"jobQueue\": ",
+                                    "\"",
+                                    {
+                                        "Ref": "JobQueue"
+                                    },
+                                    "\"",
+                                    ",\"jobName\": ",
+                                    "\"",
+                                    {
+                                        "Ref": "JobName"
+                                    },
+                                    "\"",
+                                    ",\"wait_time\": 120,",
+                                    "\"batchjob\": {\"parameters\": {\"arguments\": \"{\\\"Start_Date\\\": \\\"YYYY-MM-DD\\\",\\\"End_Date\\\": \\\"YYYY-MM-DD\\\",\\\"Notified_To\\\": \\\"abc@test.com\\\"}\"}}}"
+                                ]
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CheckJobFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            "status-check-lambda",
+                            {
+                                "Ref": "Environment"
+                            }
+                        ]
+                    ]
+                },
+                "Handler": "jobstatus.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "BatchContainerIAMRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "S3Bucket": {
+                        "Ref": "TestBucketName"
+                    },
+                    "S3Key": {
+                        "Fn::Join": [
+                            "/",
+                            [
+                                {
+                                    "Ref": "TestLambdaS3Key"
+                                },
+                                "status-check-lambda.zip"
+                            ]
+                        ]
+                    }
+                },
+                "MemorySize": 128,
+                "Runtime": "python3.9",
+                "Timeout": "25",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "test-batch"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "application-batch"
+                    }
+                ]
+            }
+        },
+        "SendNotificationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            "notify-lambda",
+                            {
+                                "Ref": "Environment"
+                            }
+                        ]
+                    ]
+                },
+                "Handler": "jobnotify.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "BatchContainerIAMRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "S3Bucket": {
+                        "Ref": "TestBucketName"
+                    },
+                    "S3Key": {
+                        "Fn::Join": [
+                            "/",
+                            [
+                                {
+                                    "Ref": "TestLambdaS3Key"
+                                },
+                                "notify-lambda.zip"
+                            ]
+                        ]
+                    }
+                },
+                "MemorySize": 128,
+                "Runtime": "python3.9",
+                "Timeout": "25",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "test"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "application"
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": "Team"
+                    }
+                ]
+            }
+        }
+    }
+}
