@@ -1,0 +1,614 @@
+{
+  "Parameters": {
+    "Environment": {
+      "Default": "test",
+      "Description": "Must be one of the following: test.",
+      "Type": "String"
+    },
+    "ECSRepositoryURI": {
+      "Description": "Repository must exist before the deployment of this template.",
+      "Type": "String"
+    },
+    "ImageVersion": {
+      "Description": "Version Number of the docker image",
+      "Default": "latest",
+      "Type": "String"
+    },
+    "JobName": {
+      "Description": "Name of the Job",
+      "Type": "String"
+    },
+    "JobName2": {
+      "Description": "Name of the Job",
+      "Type": "String"
+    },
+    "JobQueue": {
+      "Description": "Name of the JobQueue",
+      "Default": "JobQueue",
+      "Type": "String"
+    },
+    "JobDefinitionName": {
+      "Description": "Name of the JobDefinition, It can be same as JobName",
+      "Type": "String"
+    },
+    "JobTimeout": {
+      "Description": "Job Timeout",
+      "Type": "String",
+      "Default": 1800
+    },
+    "Memory": {
+      "Description": "Amount of Memory needed for the Job",
+      "Type": "String",
+      "Default": 3815
+    },
+    "Vcpus": {
+      "Description": "No of CPU's needed for the Job",
+      "Type": "String",
+      "Default": "2"
+    },
+    "SheduleInterval": {
+      "Description": "Job Schedule Time Interval",
+      "Type": "String",
+      "Default": "15"
+    },
+    "JobDefinitionVersion": {
+      "Description": "Version of Job Definition",
+      "Type": "String",
+      "Default": "jobDefVersion"
+    },
+    "ServiceName": {
+      "Description": "Name",
+      "Type": "String",
+      "Default": "test"
+    },
+    "AwsReion": {
+      "Default": "us-west-2",
+      "Description": "AWS Reion in which the application will be hosted.",
+      "Type": "String"
+    },
+    "company": {
+      "Description": "Company",
+      "Type": "String",
+      "Default": "test"
+    }
+  },
+  "Mappings": {
+    "EnvMap": {
+      "dev": {
+        "AccountId": "7",
+        "ServiceName": "test",
+        "appname": "test",
+        "branch": "main",
+        "test": "test-jobDefVersion",
+        "testLogRetrieval": "sample-jobDefVersion",
+        "cSNS": "arn:aws:sns:us-west-2:7:Topic",
+        "ScheduleInterval": "cron(0 10 1 2,5,8,11 ? *)",
+        "logLevel": "INFO",
+        "SURL": "{{resolve:secretsmanager:/a/b/webhook_url}}"
+      }
+    }
+  },
+  "Resources": {
+    "BatchContainerIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "test",
+              {
+                "Ref": "Environment"
+              },
+              {
+                "Ref": "ServiceName"
+              },
+              "BatchContainerIAMRole"
+            ]
+          ]
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudformation.amazonaws.com",
+                  "events.amazonaws.com",
+                  "ecs-tasks.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "-",
+                [
+                  "test",
+                  {
+                    "Ref": "Environment"
+                  }
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "batch:SubmitJob",
+                    "states:ListExecutions",
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams",
+                    "logs:GetLogEvents"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetResourcePolicy",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:ListSecretVersionIds"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:*:secret:/a/*",
+                    "arn:aws:secretsmanager:*:secret:/b/*",
+                    "arn:aws:secretsmanager:*:secret:c/*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sqs:*",
+                  "Resource": ["arn:aws:sqs:*:*:*a*", "arn:aws:sqs:*:*:*b*"]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sns:*",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["ses:*"],
+                  "Resource": ["*"]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CDFSFSPUARJobDefinition": {
+      "Type": "AWS::Batch::JobDefinition",
+      "Properties": {
+        "Type": "Container",
+        "Parameters": {
+          "startDate": "DEFAULT",
+          "endDate": "DEFAULT"
+        },
+        "PropagateTags": true,
+        "Tags": {
+          "Brand": "Brand",
+          "Team": "team",
+          "Application": "test",
+          "CostCenter": "costcenter",
+          "AssetProtectionLevel": "0",
+          "Name": "test"
+        },
+        "ContainerProperties": {
+          "Command": ["bash", "trigger.sh"],
+          "Memory": {
+            "Ref": "Memory"
+          },
+          "Vcpus": {
+            "Ref": "Vcpus"
+          },
+          "Image": {
+            "Fn::Join": [
+              "",
+              [
+                {
+                  "Ref": "ECSRepositoryURI"
+                },
+                ":",
+                {
+                  "Ref": "ImageVersion"
+                }
+              ]
+            ]
+          },
+          "JobRoleArn": {
+            "Ref": "BatchContainerIAMRole"
+          },
+          "Environment": [
+            {
+              "Name": "Environment",
+              "Value": {
+                "Ref": "Environment"
+              }
+            },
+            {
+              "Name": "MY_AWS_ENV",
+              "Value": "AWS_BATCH"
+            },
+            {
+              "Name": "LOG_LEVEL",
+              "Value": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "logLevel"
+                ]
+              }
+            },
+            {
+              "Name": "APPLICATION_NAME",
+              "Value": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "appname"
+                ]
+              }
+            },
+            {
+              "Name": "AWS_ReION",
+              "Value": "us-west-2"
+            },
+            {
+              "Name": "AWS_CLIENT_ReION",
+              "Value": "us-west-2"
+            },
+            {
+              "Name": "BRANCH",
+              "Value": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "branch"
+                ]
+              }
+            },
+            {
+              "Name": "company",
+              "Value": {
+                "Ref": "company"
+              }
+            }
+          ]
+        },
+        "JobDefinitionName": {
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Ref": "JobName"
+              },
+              {
+                "Ref": "Environment"
+              },
+              {
+                "Ref": "JobDefinitionVersion"
+              }
+            ]
+          ]
+        },
+        "RetryStratey": {
+          "Attempts": 1
+        },
+        "Timeout": {
+          "AttemptDurationSeconds": {
+            "Ref": "JobTimeout"
+          }
+        }
+      }
+    },
+    "CDFSFSPUARJobDeLogRetrieval": {
+      "Type": "AWS::Batch::JobDefinition",
+      "Properties": {
+        "Type": "Container",
+        "Parameters": {
+          "startDate": "DEFAULT",
+          "endDate": "DEFAULT"
+        },
+        "PropagateTags": true,
+        "Tags": {
+          "Brand": "Brand",
+          "Team": "team",
+          "Application": "test",
+          "CostCenter": "costcenter",
+          "AssetProtectionLevel": "0",
+          "Name": "test"
+        },
+        "ContainerProperties": {
+          "Command": ["bash", "trigger2.sh"],
+          "Memory": {
+            "Ref": "Memory"
+          },
+          "Vcpus": {
+            "Ref": "Vcpus"
+          },
+          "Image": {
+            "Fn::Join": [
+              "",
+              [
+                {
+                  "Ref": "ECSRepositoryURI"
+                },
+                ":",
+                {
+                  "Ref": "ImageVersion"
+                }
+              ]
+            ]
+          },
+          "JobRoleArn": {
+            "Ref": "BatchContainerIAMRole"
+          },
+          "Environment": [
+            {
+              "Name": "Environment",
+              "Value": {
+                "Ref": "Environment"
+              }
+            },
+            {
+              "Name": "MY_AWS_ENV",
+              "Value": "AWS_BATCH"
+            },
+            {
+              "Name": "LOG_LEVEL",
+              "Value": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "logLevel"
+                ]
+              }
+            },
+            {
+              "Name": "APPLICATION_NAME",
+              "Value": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "appname"
+                ]
+              }
+            },
+            {
+              "Name": "AWS_ReION",
+              "Value": "us-west-2"
+            },
+            {
+              "Name": "AWS_CLIENT_ReION",
+              "Value": "us-west-2"
+            },
+            {
+              "Name": "BRANCH",
+              "Value": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "branch"
+                ]
+              }
+            },
+            {
+              "Name": "company",
+              "Value": {
+                "Ref": "company"
+              }
+            }
+          ]
+        },
+        "JobDefinitionName": {
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Ref": "JobName2"
+              },
+              {
+                "Ref": "Environment"
+              },
+              {
+                "Ref": "JobDefinitionVersion"
+              }
+            ]
+          ]
+        },
+        "RetryStratey": {
+          "Attempts": 1
+        },
+        "Timeout": {
+          "AttemptDurationSeconds": {
+            "Ref": "JobTimeout"
+          }
+        }
+      }
+    },
+    "c": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "DefinitionString": {
+          "Fn::Sub": [
+            "{\"StartAt\": \"test\", \"States\": {\"test\": {\"Type\": \"Task\", \"Resource\": \"arn:aws:states:::batch:submitJob.sync\", \"Parameters\": {\"JobDefinition\": \"${test}\", \"JobName\": \"test\", \"JobQueue\": \"${JobQueue}\", \"ContainerOverrides\": {\"Environment\": [{\"Name\": \"company\", \"Value\": \"e\"}]}}, \"ResultPath\": \"$.testOutput\", \"Catch\": [{\"ErrorEquals\": [\"States.ALL\"], \"ResultPath\": \"$.error\", \"Next\": \"Notify Failure\"}], \"Next\": \"testLogRetrievalExpedia\"}, \"testLogRetrievalExpedia\": {\"Type\": \"Task\", \"Resource\": \"arn:aws:states:::batch:submitJob.sync\", \"Parameters\": {\"JobDefinition\": \"${testLogRetrieval}\", \"JobName\": \"testLogRetrieval\", \"JobQueue\": \"${JobQueue}\", \"ContainerOverrides\": {\"Environment\": [{\"Name\": \"company\", \"Value\": \"e\"}, {\"Name\": \"log_stream_name\", \"Value.$\": \"$.testOutput.Attempts[0].Container.LogStreamName\"}]}}, \"ResultPath\": \"$.testLogRetrievalExpediaOutput\", \"Catch\": [{\"ErrorEquals\": [\"States.ALL\"], \"ResultPath\": \"$.error\", \"Next\": \"Notify Failure\"}], \"Next\": \"testv\"}, \"testv\": {\"Type\": \"Task\", \"Resource\": \"arn:aws:states:::batch:submitJob.sync\", \"Parameters\": {\"JobDefinition\": \"${test}\", \"JobName\": \"test\", \"JobQueue\": \"${JobQueue}\", \"ContainerOverrides\": {\"Environment\": [{\"Name\": \"company\", \"Value\": \"v\"}]}}, \"ResultPath\": \"$.testvOutput\", \"Catch\": [{\"ErrorEquals\": [\"States.ALL\"], \"ResultPath\": \"$.error\", \"Next\": \"Notify Failure\"}], \"Next\": \"testLogRetrievalv\"}, \"testLogRetrievalv\": {\"Type\": \"Task\", \"Resource\": \"arn:aws:states:::batch:submitJob.sync\", \"Parameters\": {\"JobDefinition\": \"${testLogRetrieval}\", \"JobName\": \"testLogRetrieval\", \"JobQueue\": \"${JobQueue}\", \"ContainerOverrides\": {\"Environment\": [{\"Name\": \"company\", \"Value\": \"v\"}, {\"Name\": \"log_stream_name\", \"Value.$\": \"$.testvOutput.Attempts[0].Container.LogStreamName\"}]}}, \"ResultPath\": \"$.testLogRetrievalvOutput\", \"Catch\": [{\"ErrorEquals\": [\"States.ALL\"], \"ResultPath\": \"$.error\", \"Next\": \"Notify Failure\"}], \"End\": true}, \"Notify Failure\": {\"Type\": \"Task\", \"Resource\": \"arn:aws:states:::sns:publish\", \"Parameters\": {\"TopicArn\": \"${cSNS}\", \"Message\": {\"Default\": \"Batch Job Failed to Execute\"}, \"MessageStructure\": \"json\", \"Subject\": \"test\", \"MessageAttributes\": {\"message\": {\"DataType\": \"String\", \"StringValue.$\": \"$.error\"}, \"jobName\": {\"DataType\": \"String\", \"StringValue\": \"test\"}, \"state\": {\"DataType\": \"String\", \"StringValue\": \"Critical\"}, \"env\": {\"DataType\": \"String\", \"StringValue\": \"${Environment}\"}, \"SURL\": {\"DataType\": \"String\", \"StringValue\": \"${SURL}\"}}}, \"Next\": \"Job Failed\"}, \"Job Failed\": {\"Type\": \"Fail\", \"Cause\": \"$.error\"}}}",
+            {
+              "JobQueue": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:batch:us-west-2:",
+                    {
+                      "Fn::FindInMap": [
+                        "EnvMap",
+                        { "Ref": "Environment" },
+                        "AccountId"
+                      ]
+                    },
+                    ":job-queue/",
+                    { "Ref": "JobQueue" }
+                  ]
+                ]
+              },
+              "SURL": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  { "Ref": "Environment" },
+                  "SURL"
+                ]
+              },
+              "test": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  { "Ref": "Environment" },
+                  "test"
+                ]
+              },
+              "testLogRetrieval": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  { "Ref": "Environment" },
+                  "testLogRetrieval"
+                ]
+              },
+              "cSNS": {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  { "Ref": "Environment" },
+                  "cSNS"
+                ]
+              }
+            }
+          ]
+        },
+        "RoleArn": {
+          "Fn::Join": [
+            "",
+            [
+              "arn:aws:iam::",
+              {
+                "Fn::FindInMap": [
+                  "EnvMap",
+                  {
+                    "Ref": "Environment"
+                  },
+                  "AccountId"
+                ]
+              },
+              ":role/Batch-Resources-StatesExecutionRole"
+            ]
+          ]
+        },
+        "StateMachineName": "c"
+      }
+    },
+    "cTrigger": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Rule to invoke the step function to trigger the batch job",
+        "ScheduleExpression": {
+          "Fn::FindInMap": [
+            "EnvMap",
+            {
+              "Ref": "Environment"
+            },
+            "ScheduleInterval"
+          ]
+        },
+        "Name": {
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Ref": "JobName"
+              },
+              {
+                "Ref": "Environment"
+              }
+            ]
+          ]
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "c"
+            },
+            "Id": "cTarget",
+            "RoleArn": {
+              "Fn::GetAtt": ["cTriggerRole", "Arn"]
+            }
+          }
+        ]
+      }
+    },
+    "cTriggerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "cTriggerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "states:StartExecution",
+                  "Resource": {
+                    "Fn::GetAtt": ["c", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
