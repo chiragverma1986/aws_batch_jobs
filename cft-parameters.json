@@ -2,12 +2,12 @@
     "Parameters": {
         "Environment": {
             "Default": "test",
-            "Description": "Must be one of the following: test,stage,shadow and prod.",
+            "Description": "Must be one of the following: test",
             "Type": "String"
         },
         "Profile": {
             "Default": "test",
-            "Description": "Must be one of the following: dev,int,maui,prod.",
+            "Description": "Must be one of the following: test",
             "Type": "String"
         },
         "TestBucketName": {
